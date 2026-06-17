@@ -101,6 +101,7 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
   });
 
   this.$imageWrapper.on('mousedown', function (e) {
+    if (e.target.tagName && e.target.tagName.toLowerCase() === 'input') return;
     if (e.target !== self.$image[0] && e.target !== self.$imageWrapper[0]) return;
     e.preventDefault(); // Prevent text selection
 
@@ -222,6 +223,22 @@ H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
       'text': '×',
       'title': 'Remover'
     }).appendTo($box);
+
+    var $input = H5PEditor.$('<input>', {
+      type: 'text',
+      placeholder: 'Item (Opc.)',
+      value: box.requiredItem || ''
+    }).appendTo($box);
+
+    $input.on('mousedown', function (e) {
+      e.stopPropagation();
+    });
+
+    $input.on('change', function (e) {
+      var index = parseInt(H5PEditor.$(this).parent().attr('data-index'), 10);
+      self.rectangles[index].requiredItem = this.value;
+      self.save();
+    });
 
     $deleteBtn.on('mousedown', function (e) {
       e.stopPropagation();

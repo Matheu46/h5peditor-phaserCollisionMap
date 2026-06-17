@@ -39,3 +39,15 @@
   font-weight: bold;
   z-index: 10;
 }
+
+.h5p-editor-phaser-collision-map .collision-box input {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  width: calc(100% - 4px);
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border: none;
+  padding: 2px;
+  box-sizing: border-box;
+}

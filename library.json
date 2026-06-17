@@ -1,0 +1,22 @@
+{
+  "title": "Phaser Collision Map",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "patchVersion": 0,
+  "machineName": "H5PEditor.PhaserCollisionMap",
+  "runnable": 0,
+  "coreApi": {
+    "majorVersion": 1,
+    "minorVersion": 24
+  },
+  "preloadedJs": [
+    {
+      "path": "collision-map.js"
+    }
+  ],
+  "preloadedCss": [
+    {
+      "path": "collision-map.css"
+    }
+  ]
+}

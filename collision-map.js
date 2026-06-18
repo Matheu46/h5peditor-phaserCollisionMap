@@ -6,15 +6,20 @@ H5PEditor.PhaserCollisionMap = function (parent, field, params, setValue) {
   this.params = params;
   this.setValue = setValue;
 
-  this.rectangles = [];
+  this.mapData = { walls: [], points: [] };
+  this.mode = 'walls';
   if (this.params) {
     try {
-      this.rectangles = JSON.parse(this.params);
-      if (!Array.isArray(this.rectangles)) {
-        this.rectangles = [];
+      var parsed = JSON.parse(this.params);
+      if (Array.isArray(parsed)) {
+        this.mapData.walls = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        this.mapData = parsed;
+        if (!this.mapData.walls) this.mapData.walls = [];
+        if (!this.mapData.points) this.mapData.points = [];
       }
     } catch (e) {
-      this.rectangles = [];
+      this.mapData = { walls: [], points: [] };
     }
   }
 
@@ -42,8 +47,33 @@ H5PEditor.PhaserCollisionMap.prototype.appendTo = function ($wrapper) {
     H5PEditor.$('<span class="h5peditor-field-description"></span>').html(this.field.description).appendTo(this.$container);
   }
 
+  this.$toolbar = H5PEditor.$('<div>', {
+    'class': 'h5p-phaser-toolbar'
+  }).appendTo(this.$container);
+
+  this.$btnWalls = H5PEditor.$('<button>', {
+    text: 'Desenhar Paredes',
+    'class': 'active'
+  }).on('click', function(e) {
+    e.preventDefault();
+    self.mode = 'walls';
+    self.$btnWalls.addClass('active');
+    self.$btnPoints.removeClass('active');
+    self.$imageWrapper.removeClass('mode-points').addClass('mode-walls');
+  }).appendTo(this.$toolbar);
+
+  this.$btnPoints = H5PEditor.$('<button>', {
+    text: 'Adicionar Ponto de Interação'
+  }).on('click', function(e) {
+    e.preventDefault();
+    self.mode = 'points';
+    self.$btnPoints.addClass('active');
+    self.$btnWalls.removeClass('active');
+    self.$imageWrapper.removeClass('mode-walls').addClass('mode-points');
+  }).appendTo(this.$toolbar);
+
   this.$imageWrapper = H5PEditor.$('<div>', {
-    'class': 'h5p-editor-phaser-collision-map'
+    'class': 'h5p-editor-phaser-collision-map mode-' + this.mode
   }).appendTo(this.$container);
 
   this.$container.appendTo($wrapper);
@@ -100,27 +130,43 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
   }).appendTo(this.$imageWrapper);
 
   this.$image.on('load', function () {
-    self.renderRectangles();
+    self.renderMapData();
   });
 
   this.$imageWrapper.on('mousedown', function (e) {
     if (e.target.tagName && e.target.tagName.toLowerCase() === 'input') return;
+    if (e.target.classList && e.target.classList.contains('delete-btn')) return;
     if (e.target !== self.$image[0] && e.target !== self.$imageWrapper[0]) return;
     e.preventDefault(); // Prevent text selection
 
-    self.isDrawing = true;
     var rect = self.$imageWrapper[0].getBoundingClientRect();
-    self.startX = e.clientX - rect.left;
-    self.startY = e.clientY - rect.top;
+    var currentX = e.clientX - rect.left;
+    var currentY = e.clientY - rect.top;
 
-    self.currentRect = H5PEditor.$('<div>', {
-      'class': 'collision-box'
-    }).css({
-      left: self.startX + 'px',
-      top: self.startY + 'px',
-      width: 0,
-      height: 0
-    }).appendTo(self.$imageWrapper);
+    if (self.mode === 'walls') {
+      self.isDrawing = true;
+      self.startX = currentX;
+      self.startY = currentY;
+
+      self.currentRect = H5PEditor.$('<div>', {
+        'class': 'collision-box'
+      }).css({
+        left: self.startX + 'px',
+        top: self.startY + 'px',
+        width: 0,
+        height: 0
+      }).appendTo(self.$imageWrapper);
+    } else if (self.mode === 'points') {
+      var scaleX = self.$image[0].naturalWidth / rect.width;
+      var scaleY = self.$image[0].naturalHeight / rect.height;
+
+      var realX = Math.round(currentX * scaleX);
+      var realY = Math.round(currentY * scaleY);
+
+      self.mapData.points.push({ id: Date.now(), x: realX, y: realY });
+      self.save();
+      self.renderMapData();
+    }
   });
 
   this.$imageWrapper.on('mousemove', function (e) {
@@ -131,7 +177,7 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
     currentX = Math.max(0, Math.min(currentX, rect.width));
     currentY = Math.max(0, Math.min(currentY, rect.height));
 
-    if (self.isDrawing) {
+    if (self.mode === 'walls' && self.isDrawing) {
       var left = Math.min(self.startX, currentX);
       var top = Math.min(self.startY, currentY);
       var width = Math.abs(currentX - self.startX);
@@ -143,14 +189,14 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
         width: width + 'px',
         height: height + 'px'
       });
-    } else if (self.dragIndex > -1) {
+    } else if (self.mode === 'walls' && self.dragIndex > -1) {
       var scaleX = self.$image[0].naturalWidth / rect.width;
       var scaleY = self.$image[0].naturalHeight / rect.height;
 
       var dx = (currentX - self.startX) * scaleX;
       var dy = (currentY - self.startY) * scaleY;
 
-      var boxData = self.rectangles[self.dragIndex];
+      var boxData = self.mapData.walls[self.dragIndex];
       boxData.x = Math.round(self.initialBoxX + dx);
       boxData.y = Math.round(self.initialBoxY + dy);
 
@@ -161,6 +207,25 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
       $draggedBox.css({
         left: (boxData.x / scaleX) + 'px',
         top: (boxData.y / scaleY) + 'px'
+      });
+    } else if (self.mode === 'points' && self.dragIndex > -1) {
+      var scaleX = self.$image[0].naturalWidth / rect.width;
+      var scaleY = self.$image[0].naturalHeight / rect.height;
+
+      var dx = (currentX - self.startX) * scaleX;
+      var dy = (currentY - self.startY) * scaleY;
+
+      var pointData = self.mapData.points[self.dragIndex];
+      pointData.x = Math.round(self.initialBoxX + dx);
+      pointData.y = Math.round(self.initialBoxY + dy);
+
+      pointData.x = Math.max(0, Math.min(pointData.x, self.$image[0].naturalWidth));
+      pointData.y = Math.max(0, Math.min(pointData.y, self.$image[0].naturalHeight));
+
+      var $draggedPin = self.$imageWrapper.find('.interaction-pin[data-index="' + self.dragIndex + '"]');
+      $draggedPin.css({
+        left: (pointData.x / scaleX) + 'px',
+        top: (pointData.y / scaleY) + 'px'
       });
     }
   });
@@ -192,9 +257,9 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
           height: Math.round(height * scaleY)
         };
 
-        self.rectangles.push(realBox);
+        self.mapData.walls.push(realBox);
         self.save();
-        self.renderRectangles();
+        self.renderMapData();
       }
 
       if (self.currentRect) {
@@ -221,17 +286,18 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
   });
 };
 
-H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
+H5PEditor.PhaserCollisionMap.prototype.renderMapData = function () {
   var self = this;
 
   this.$imageWrapper.find('.collision-box').remove();
+  this.$imageWrapper.find('.interaction-pin').remove();
 
   if (!this.$image || !this.$image[0].naturalWidth) return;
 
   var domRect = this.$imageWrapper[0].getBoundingClientRect();
   if (domRect.width === 0) {
     setTimeout(function () {
-      self.renderRectangles();
+      self.renderMapData();
     }, 200);
     return;
   }
@@ -239,8 +305,8 @@ H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
   var scaleX = domRect.width / this.$image[0].naturalWidth;
   var scaleY = domRect.height / this.$image[0].naturalHeight;
 
-  for (var i = 0; i < this.rectangles.length; i++) {
-    var box = this.rectangles[i];
+  for (var i = 0; i < this.mapData.walls.length; i++) {
+    var box = this.mapData.walls[i];
 
     var $box = H5PEditor.$('<div>', {
       'class': 'collision-box',
@@ -254,6 +320,7 @@ H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
     }).appendTo(this.$imageWrapper);
 
     $box.on('mousedown', function (e) {
+      if (self.mode !== 'walls') return;
       if (e.target.tagName && e.target.tagName.toLowerCase() === 'input') return;
       if (e.target.classList && e.target.classList.contains('delete-btn')) return;
 
@@ -265,7 +332,7 @@ H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
       self.startX = e.clientX - rect.left;
       self.startY = e.clientY - rect.top;
 
-      var boxData = self.rectangles[self.dragIndex];
+      var boxData = self.mapData.walls[self.dragIndex];
       self.initialBoxX = boxData.x;
       self.initialBoxY = boxData.y;
     });
@@ -288,22 +355,68 @@ H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
 
     $input.on('change', function (e) {
       var index = parseInt(H5PEditor.$(this).parent().attr('data-index'), 10);
-      self.rectangles[index].requiredItem = this.value;
+      self.mapData.walls[index].requiredItem = this.value;
       self.save();
     });
 
     $deleteBtn.on('mousedown', function (e) {
       e.stopPropagation();
       var index = parseInt(H5PEditor.$(this).parent().attr('data-index'), 10);
-      self.rectangles.splice(index, 1);
+      self.mapData.walls.splice(index, 1);
       self.save();
-      self.renderRectangles();
+      self.renderMapData();
+    });
+  }
+
+  for (var j = 0; j < this.mapData.points.length; j++) {
+    var point = this.mapData.points[j];
+    var pinNumber = j + 1;
+
+    var $pin = H5PEditor.$('<div>', {
+      'class': 'interaction-pin',
+      'data-index': j,
+      text: pinNumber
+    }).css({
+      left: (point.x * scaleX) + 'px',
+      top: (point.y * scaleY) + 'px',
+      cursor: 'move'
+    }).appendTo(this.$imageWrapper);
+
+    $pin.on('mousedown', function (e) {
+      if (self.mode !== 'points') return;
+      if (e.target.classList && e.target.classList.contains('delete-btn')) return;
+
+      e.stopPropagation();
+      e.preventDefault();
+
+      self.dragIndex = parseInt(H5PEditor.$(this).attr('data-index'), 10);
+      var rect = self.$imageWrapper[0].getBoundingClientRect();
+      self.startX = e.clientX - rect.left;
+      self.startY = e.clientY - rect.top;
+
+      var pointData = self.mapData.points[self.dragIndex];
+      self.initialBoxX = pointData.x;
+      self.initialBoxY = pointData.y;
+    });
+
+    var $pinDeleteBtn = H5PEditor.$('<div>', {
+      'class': 'delete-btn',
+      'text': '×',
+      'title': 'Remover Ponto'
+    }).appendTo($pin);
+
+    $pinDeleteBtn.on('mousedown', function (e) {
+      e.stopPropagation();
+      var index = parseInt(H5PEditor.$(this).parent().attr('data-index'), 10);
+      self.mapData.points.splice(index, 1);
+      self.save();
+      self.renderMapData();
     });
   }
 };
 
 H5PEditor.PhaserCollisionMap.prototype.save = function () {
-  var value = JSON.stringify(this.rectangles);
+  var value = JSON.stringify(this.mapData);
   this.params = value;
   this.setValue(this.field, value);
 };

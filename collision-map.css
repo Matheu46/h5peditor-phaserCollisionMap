@@ -51,3 +51,70 @@
   padding: 2px;
   box-sizing: border-box;
 }
+
+.h5p-phaser-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.h5p-phaser-toolbar button {
+  padding: 5px 10px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+
+.h5p-phaser-toolbar button.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.h5p-editor-phaser-collision-map .interaction-pin {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background-color: #ffaa00;
+  border: 2px solid #cc8800;
+  border-radius: 50%;
+  color: white;
+  text-align: center;
+  line-height: 20px;
+  font-weight: bold;
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.h5p-editor-phaser-collision-map .interaction-pin .delete-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  color: red;
+  border: 1px solid red;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: bold;
+  z-index: 10;
+}
+
+/* Modo Paredes: Esconde a edição de pontos de interação */
+.h5p-editor-phaser-collision-map.mode-walls .interaction-pin {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Modo Interações: Esconde a edição de paredes de colisão */
+.h5p-editor-phaser-collision-map.mode-points .collision-box {
+  opacity: 0.5;
+  pointer-events: none;
+}

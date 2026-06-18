@@ -94,6 +94,8 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
   this.$image = H5PEditor.$('<img>', {
     src: imageSrc,
     draggable: false
+  }).on('dragstart', function(e) {
+    e.preventDefault();
   }).appendTo(this.$imageWrapper);
 
   this.$image.on('load', function () {

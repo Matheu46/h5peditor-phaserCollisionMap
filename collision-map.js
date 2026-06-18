@@ -19,6 +19,7 @@ H5PEditor.PhaserCollisionMap = function (parent, field, params, setValue) {
   }
 
   this.isDrawing = false;
+  this.dragIndex = -1;
   this.startX = 0;
   this.startY = 0;
   this.currentRect = null;
@@ -123,8 +124,6 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
   });
 
   this.$imageWrapper.on('mousemove', function (e) {
-    if (!self.isDrawing) return;
-
     var rect = self.$imageWrapper[0].getBoundingClientRect();
     var currentX = e.clientX - rect.left;
     var currentY = e.clientY - rect.top;
@@ -132,54 +131,79 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
     currentX = Math.max(0, Math.min(currentX, rect.width));
     currentY = Math.max(0, Math.min(currentY, rect.height));
 
-    var left = Math.min(self.startX, currentX);
-    var top = Math.min(self.startY, currentY);
-    var width = Math.abs(currentX - self.startX);
-    var height = Math.abs(currentY - self.startY);
+    if (self.isDrawing) {
+      var left = Math.min(self.startX, currentX);
+      var top = Math.min(self.startY, currentY);
+      var width = Math.abs(currentX - self.startX);
+      var height = Math.abs(currentY - self.startY);
 
-    self.currentRect.css({
-      left: left + 'px',
-      top: top + 'px',
-      width: width + 'px',
-      height: height + 'px'
-    });
+      self.currentRect.css({
+        left: left + 'px',
+        top: top + 'px',
+        width: width + 'px',
+        height: height + 'px'
+      });
+    } else if (self.dragIndex > -1) {
+      var scaleX = self.$image[0].naturalWidth / rect.width;
+      var scaleY = self.$image[0].naturalHeight / rect.height;
+
+      var dx = (currentX - self.startX) * scaleX;
+      var dy = (currentY - self.startY) * scaleY;
+
+      var boxData = self.rectangles[self.dragIndex];
+      boxData.x = Math.round(self.initialBoxX + dx);
+      boxData.y = Math.round(self.initialBoxY + dy);
+
+      boxData.x = Math.max(0, Math.min(boxData.x, self.$image[0].naturalWidth - boxData.width));
+      boxData.y = Math.max(0, Math.min(boxData.y, self.$image[0].naturalHeight - boxData.height));
+
+      var $draggedBox = self.$imageWrapper.find('.collision-box[data-index="' + self.dragIndex + '"]');
+      $draggedBox.css({
+        left: (boxData.x / scaleX) + 'px',
+        top: (boxData.y / scaleY) + 'px'
+      });
+    }
   });
 
   this.$imageWrapper.on('mouseup', function (e) {
-    if (!self.isDrawing) return;
-    self.isDrawing = false;
+    if (self.isDrawing) {
+      self.isDrawing = false;
 
-    var widthStr = self.currentRect.css('width');
-    var heightStr = self.currentRect.css('height');
-    var leftStr = self.currentRect.css('left');
-    var topStr = self.currentRect.css('top');
+      var widthStr = self.currentRect.css('width');
+      var heightStr = self.currentRect.css('height');
+      var leftStr = self.currentRect.css('left');
+      var topStr = self.currentRect.css('top');
 
-    var width = parseFloat(widthStr);
-    var height = parseFloat(heightStr);
+      var width = parseFloat(widthStr);
+      var height = parseFloat(heightStr);
 
-    if (width > 5 && height > 5) {
-      var domRect = self.$imageWrapper[0].getBoundingClientRect();
-      var scaleX = self.$image[0].naturalWidth / domRect.width;
-      var scaleY = self.$image[0].naturalHeight / domRect.height;
+      if (width > 5 && height > 5) {
+        var domRect = self.$imageWrapper[0].getBoundingClientRect();
+        var scaleX = self.$image[0].naturalWidth / domRect.width;
+        var scaleY = self.$image[0].naturalHeight / domRect.height;
 
-      var left = parseFloat(leftStr);
-      var top = parseFloat(topStr);
+        var left = parseFloat(leftStr);
+        var top = parseFloat(topStr);
 
-      var realBox = {
-        x: Math.round(left * scaleX),
-        y: Math.round(top * scaleY),
-        width: Math.round(width * scaleX),
-        height: Math.round(height * scaleY)
-      };
+        var realBox = {
+          x: Math.round(left * scaleX),
+          y: Math.round(top * scaleY),
+          width: Math.round(width * scaleX),
+          height: Math.round(height * scaleY)
+        };
 
-      self.rectangles.push(realBox);
+        self.rectangles.push(realBox);
+        self.save();
+        self.renderRectangles();
+      }
+
+      if (self.currentRect) {
+        self.currentRect.remove();
+        self.currentRect = null;
+      }
+    } else if (self.dragIndex > -1) {
+      self.dragIndex = -1;
       self.save();
-      self.renderRectangles();
-    }
-
-    if (self.currentRect) {
-      self.currentRect.remove();
-      self.currentRect = null;
     }
   });
 
@@ -190,6 +214,9 @@ H5PEditor.PhaserCollisionMap.prototype.renderImage = function (path) {
         self.currentRect.remove();
         self.currentRect = null;
       }
+    } else if (self.dragIndex > -1) {
+      self.dragIndex = -1;
+      self.save();
     }
   });
 };
@@ -202,7 +229,12 @@ H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
   if (!this.$image || !this.$image[0].naturalWidth) return;
 
   var domRect = this.$imageWrapper[0].getBoundingClientRect();
-  if (domRect.width === 0) return;
+  if (domRect.width === 0) {
+    setTimeout(function () {
+      self.renderRectangles();
+    }, 200);
+    return;
+  }
 
   var scaleX = domRect.width / this.$image[0].naturalWidth;
   var scaleY = domRect.height / this.$image[0].naturalHeight;
@@ -217,8 +249,26 @@ H5PEditor.PhaserCollisionMap.prototype.renderRectangles = function () {
       left: (box.x * scaleX) + 'px',
       top: (box.y * scaleY) + 'px',
       width: (box.width * scaleX) + 'px',
-      height: (box.height * scaleY) + 'px'
+      height: (box.height * scaleY) + 'px',
+      cursor: 'move'
     }).appendTo(this.$imageWrapper);
+
+    $box.on('mousedown', function (e) {
+      if (e.target.tagName && e.target.tagName.toLowerCase() === 'input') return;
+      if (e.target.classList && e.target.classList.contains('delete-btn')) return;
+
+      e.stopPropagation();
+      e.preventDefault();
+
+      self.dragIndex = parseInt(H5PEditor.$(this).attr('data-index'), 10);
+      var rect = self.$imageWrapper[0].getBoundingClientRect();
+      self.startX = e.clientX - rect.left;
+      self.startY = e.clientY - rect.top;
+
+      var boxData = self.rectangles[self.dragIndex];
+      self.initialBoxX = boxData.x;
+      self.initialBoxY = boxData.y;
+    });
 
     var $deleteBtn = H5PEditor.$('<div>', {
       'class': 'delete-btn',
